@@ -1,3 +1,5 @@
+from common import *
+
 SOLOMON_12_9 = [
     [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1C, 0xBC, 0xFD],
     [0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x89, 0x31, 0x08],
@@ -72,3 +74,9 @@ def rs_calc_syndromes(msg, nsym):
     for i in range(0, nsym):
         synd[i] = gf_poly_eval(msg, GF_EXP_TABLE[i+1])
     return [0] + synd # pad with one 0 for mathematical precision (else we can end up with weird calculations sometimes)
+
+def reedsolomon_12_9(data, crc):
+    data = [get_value(data[i:i+8]) for i in range(0, 96, 8)]
+    data[9:12] = [crc[i] ^ data[9 + i] for i in range(3)]
+    reedsolomon = mul(data, SOLOMON_12_9, gf_add, gf_mul)
+    return 'correct' if data == reedsolomon else ':(' # TODO add error correction

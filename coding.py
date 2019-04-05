@@ -2,6 +2,115 @@ from common import *
 from interleaving import *
 from hamming import *
 
+def parse_bptc_32_11(data, level):
+    deinterleave(data, EMB_RC_BPTC_INTERLEAVING)
+
+    if level >= 2:
+        print()
+        for i in range(2):
+            for j in range(16):
+                print(data[i * 16 + j], end='')
+            print()
+        print()
+
+    error_count = 0
+
+    for i in range(1):
+        temp = [data[i * 16 + j] for j in range(16)]
+
+        result = hamming(temp, HAMMING_16_11_4_H)
+        if result != 'correct':
+            print('BPTC R', i, result)
+            error_count += 1
+
+        for j in range(16):
+            data[i * 16 + j] = temp[j]
+
+    for i in range(16):
+        result = 0
+        for j in range(2):
+            result ^= data[i + 16 * j]
+
+        if result != 0:
+            print('BPTC C', i, result)
+            error_count += 1
+
+
+    if error_count > 0 or level >= 1:
+        print('BPTC ERRORS:', error_count)
+
+    if error_count > 0:
+        return None
+
+    result = data[0:12]
+
+    if level >= 1:
+        print('DATA', len(result), squash_bits(result))
+
+    if level >= 2:
+        print()
+        for i in range(1):
+            for j in range(12):
+                print(result[i * 12 + j], end='')
+            print()
+        print()
+
+    return result
+
+
+def parse_bptc_128_72(data, level):
+    deinterleave(data, EMB_LC_BPTC_INTERLEAVING)
+
+    if level >= 2:
+        print()
+        for i in range(8):
+            for j in range(16):
+                print(data[i * 16 + j], end='')
+            print()
+        print()
+
+    error_count = 0
+
+    for i in range(4):
+        temp = [data[i * 16 + j] for j in range(16)]
+
+        result = hamming(temp, HAMMING_16_11_4_H)
+        if result != 'correct':
+            print('BPTC R', i, result)
+            error_count += 1
+
+        for j in range(16):
+            data[i * 16 + j] = temp[j]
+
+    for i in range(16):
+        result = 0
+        for j in range(8):
+            result ^= data[i + 16 * j]
+
+        if result != 0:
+            print('BPTC C', i, result)
+            error_count += 1
+
+
+    if error_count > 0 or level >= 1:
+        print('BPTC ERRORS:', error_count)
+
+    if error_count > 0:
+        return None
+
+    result = []
+    for i in range(2):
+        result.extend(data[i * 16:i * 16 + 11])
+    for i in range(2, 7):
+        result.extend(data[i * 16:i * 16 + 10])
+    for i in range(2, 7):
+        result.append(data[i * 16 + 10])
+
+    if level >= 1:
+        print('DATA', len(result), squash_bits(result))
+
+    return result
+
 def parse_bptc_68_38(data, level):
     deinterleave(data, CACH_BPTC_INTERLEAVING)
 
@@ -60,7 +169,62 @@ def parse_bptc_68_38(data, level):
     return result
 
 
-def parse_bptc_196_96(data, level, mask):
+def parse_bptc_128_72(data, level):
+    deinterleave(data, EMB_LC_BPTC_INTERLEAVING)
+
+    if level >= 2:
+        print()
+        for i in range(8):
+            for j in range(16):
+                print(data[i * 16 + j], end='')
+            print()
+        print()
+
+    error_count = 0
+
+    for i in range(4):
+        temp = [data[i * 16 + j] for j in range(16)]
+
+        result = hamming(temp, HAMMING_16_11_4_H)
+        if result != 'correct':
+            print('BPTC R', i, result)
+            error_count += 1
+
+        for j in range(16):
+            data[i * 16 + j] = temp[j]
+
+    for i in range(16):
+        result = 0
+        for j in range(8):
+            result ^= data[i + 16 * j]
+
+        if result != 0:
+            print('BPTC C', i, result)
+            error_count += 1
+
+
+    if error_count > 0 or level >= 1:
+        print('BPTC ERRORS:', error_count)
+
+    if error_count > 0:
+        return None
+
+    result = []
+    for i in range(2):
+        result.extend(data[i * 16:i * 16 + 11])
+    for i in range(2, 7):
+        result.extend(data[i * 16:i * 16 + 10])
+    for i in range(2, 7):
+        result.append(data[i * 16 + 10])
+
+    if level >= 1:
+        print('DATA', len(result), squash_bits(result))
+
+    return result
+
+
+
+def parse_bptc_196_96(data, level):
     deinterleave(data, BPTC_INTERLEAVING)
 
     if level >= 2:

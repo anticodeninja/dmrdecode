@@ -4,6 +4,7 @@ from crc import *
 from reedsolomon import *
 from hamming import *
 from golay import *
+from quadratic import *
 from coding import *
 
 IDLE_BLOCK = bits('111111111000001111011111000101110011001000001001010011101101000111100111110011011000101010010001')
@@ -22,8 +23,8 @@ SYNC_PATTERNS[bits('1101 1101 0111 1111 1111 0101 1101 0111 0101 0111 1101 1101'
 
 DATA_TYPES = {}
 DATA_TYPES[bits('0000')] = ('PI HEADER', None, 0x6969)
-DATA_TYPES[bits('0001')] = ('VOICE HEADER', parse_bptc_196_96, 0x969696)
-DATA_TYPES[bits('0010')] = ('VOICE TERMINATOR', parse_bptc_196_96, 0x999999)
+DATA_TYPES[bits('0001')] = ('VOICE HEADER', parse_bptc_196_96, [0x96, 0x96, 0x96])
+DATA_TYPES[bits('0010')] = ('VOICE TERMINATOR', parse_bptc_196_96, [0x99, 0x99, 0x99])
 DATA_TYPES[bits('0011')] = ('CSBK', None, 0xA5A5)
 DATA_TYPES[bits('0100')] = ('MBC HEADER', None, 0xAAAA)
 DATA_TYPES[bits('0101')] = ('MBC CONTINUATION', None, None)
@@ -75,6 +76,8 @@ class DmrContext:
         self.stream = None
         self.level = level
         self.caches = {}
+        self.emb_lc = {}
+        self.superframes = {}
 
     def parse_service(self, service):
         print('SERVICE:', service)
@@ -118,7 +121,9 @@ class DmrContext:
 
         result = hamming(cach[:7], HAMMING_7_4_3_H)
         if result != 'correct' or self.level >= 1:
-            print('CACH_HEADER check:', result)
+            print('CACH_HEADER CHECK:', result)
+        if result == ':(':
+            return
 
         lcss = LCSS[tuple(cach[2:4])]
         print('ACCESS TYPE:', cach[0])
@@ -139,8 +144,57 @@ class DmrContext:
         else:
             print('CACH UNKNOWN********************')
 
-    def parse_voice_burst(self, burst):
-        pass
+    def parse_voice_burst(self, burst, frame_a):
+        voice = burst[:108] + burst[156:]
+        emb = burst[108:116] + burst[148:156]
+        emb_chunk = burst[116:148]
+
+        if frame_a:
+            frame = 0
+            emb_lc = self.emb_lc.pop(self.stream, [])
+        else:
+            frame = self.superframes.get(self.stream, None)
+            if frame is None:
+                print('LOST VOICE SYNC')
+                return
+            frame += 1
+            emb_lc = self.emb_lc.setdefault(self.stream, [])
+        self.superframes[self.stream] = frame
+
+        lcss = None
+        if not frame_a:
+            result = quadratic(emb, QUADRATIC_16_7_6_G)
+            if result != 'correct' or self.level >= 1:
+                print('EMB CHECK:', result)
+            if result != ':(':
+                lcss = LCSS[tuple(emb[5:7])]
+                print('COLOUR CODE:', get_value(emb[0:4]))
+                print('PI:', emb[4])
+                print('LCSS:', lcss)
+            if lcss != 'SINGLE':
+                emb_lc.extend(emb_chunk)
+
+        print('FRAME:', chr(65 + frame))
+        print('VC1', squash_bits(voice[0:72]))
+        print('VC2', squash_bits(voice[72:144]))
+        print('VC3', squash_bits(voice[144:216]))
+
+        if lcss == 'SINGLE':
+            emb_rc = parse_bptc_32_11(emb_chunk, self.level)
+            if max(emb_chunk) == 0:
+                print('NULL EMBEDDED RC')
+            else:
+                print(emb_rc)
+                print('PARSE EMB RC********************')
+        if len(emb_lc) == 128:
+            emb_lc = parse_bptc_128_72(emb_lc, self.level)
+            if emb_lc:
+                self.parse_voice_header(emb_lc)
+                crc5 = sum(get_value(emb_lc[8*i:8*(i+1)]) for i in range(9)) % 31
+                print('CRC5 CHECK:', get_value(emb_lc[72:]) == crc5)
+            self.emb_lc.pop(self.stream)
+        if frame == 5:
+            self.superframes.pop(self.stream)
 
     def parse_voice_header(self, info_data):
         flco = get_value(info_data[0:6])
@@ -157,16 +211,10 @@ class DmrContext:
         else:
             print('FLCO UNKNOWN********************')
 
+
     def parse_idle(self, info_data):
         print('CORRECT' if tuple(info_data) == IDLE_BLOCK else 'INCORRECT')
 
-        # TODO Add reedsolomon error correction
-        # temp = [get_value(info_data[i:i+8]) for i in range(0, 72, 8)]
-        # temp2 = mul(temp, SOLOMON_12_9, gf_add, gf_mul)
-        # temp3 = [get_value(info_data[i:i+8]) for i in range(0, 96, 8)]
-        # temp3[9:12] = [0x96 ^ x for x in temp3[9:12]]
-        # print(temp, temp2, temp3, hex(temp2[9] ^ temp3[9]), hex(temp2[10] ^ temp3[10]), hex(temp2[11] ^ temp3[11]))
-        # print(rs_calc_syndromes(temp3, 3))
 
     def parse_data_burst(self, burst):
         info = burst[:98] + burst[166:]
@@ -178,17 +226,22 @@ class DmrContext:
 
         result = golay(slot_type, GOLAY_20_8_G)
         if result != 'correct' or self.level >= 1:
-            print('SLOT_TYPE check:', result)
+            print('SLOT_TYPE CHECK:', result)
+        if result == ':(':
+            return
 
         data_type, parser, *args = DATA_TYPES[tuple(slot_type[4:8])]
         print('COLOR CODE:', get_value(slot_type[0:4]))
         print('DATA TYPE:', data_type)
 
         if parser:
-            data = parser(info, self.level, *args)
+            data = parser(info, self.level)
 
-        if data_type == 'VOICE HEADER':
-            self.parse_voice_header(data)
+        if data_type in ('VOICE HEADER', 'VOICE TERMINATOR'):
+            if reedsolomon_12_9(data, *args) != ':(':
+                self.parse_voice_header(data)
+            else:
+                print('CANNOT DECODE', data_type)
         elif data_type == 'IDLE':
             self.parse_idle(data)
         else:
@@ -202,13 +255,22 @@ class DmrContext:
             print('SYNC', len(sync), squash_bits(sync))
 
         sync_pattern = SYNC_PATTERNS.get(tuple(sync), None)
+        voice_frame = self.superframes.get(self.stream, None)
+
         if sync_pattern:
             print('SYNC PATTERN', sync_pattern)
+        elif voice_frame is not None:
+            print('NOSYNC VOICE', chr(66 + voice_frame))
         else:
             print('UNKNOWN SYNC PATTERN********************')
+            print(squash_bits(sync))
 
-        if sync_pattern == 'BS SOURCED DATA':
+        if sync_pattern in ('BS SOURCED DATA', 'MS SOURCED DATA'):
             self.parse_data_burst(burst)
+        elif sync_pattern in ('BS SOURCED VOICE', 'MS SOURCED VOICE'):
+            self.parse_voice_burst(burst, True)
+        elif voice_frame is not None:
+            self.parse_voice_burst(burst, False)
         else:
             print('UNKNOWN********************')
 
