@@ -19,12 +19,14 @@ GOLAY_20_8_G = [
     [0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1],
 ]
 
-def golay(bits, g):
+def golay(bits, g, out):
+    log = []
     s = mul(bits, g)
 
     if s == bits:
-        return 'correct'
-    # TODO implement code correction here
+        return True
 
-    return ':('
+    # TODO implement code correction here
+    out(0, 'cannot decode')
+    return False
 

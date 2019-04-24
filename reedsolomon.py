@@ -87,4 +87,4 @@ def reedsolomon_12_9(data, crc):
     data = [get_value(data[i:i+8]) for i in range(0, 96, 8)]
     data[9:12] = [crc[i] ^ data[9 + i] for i in range(3)]
     reedsolomon = mul(data, SOLOMON_12_9, gf_add, gf_mul)
-    return 'correct' if data == reedsolomon else ':(' # TODO add error correction
+    return data == reedsolomon # TODO add error correction

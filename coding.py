@@ -10,26 +10,23 @@ from common import *
 from interleaving import *
 from hamming import *
 
-def parse_bptc_32_11(data, level):
+def parse_bptc_32_11(data, out):
     deinterleave(data, EMB_RC_BPTC_INTERLEAVING)
 
-    if level >= 2:
-        print()
-        for i in range(2):
-            for j in range(16):
-                print(data[i * 16 + j], end='')
-            print()
-        print()
+    out(2)
+    for i in range(2):
+        out(2, ''.join(data[i * 16 + j] for j in range(16)))
+    out(2)
+
 
     error_count = 0
 
     for i in range(1):
         temp = [data[i * 16 + j] for j in range(16)]
 
-        result = hamming(temp, HAMMING_16_11_4_H)
-        if result != 'correct':
-            print('BPTC R', i, result)
-            error_count += 1
+        with out.context('BPTC R {}'.format(i)) as out:
+            if not hamming(temp, HAMMING_16_11_4_H, out):
+                error_count += 1
 
         for j in range(16):
             data[i * 16 + j] = temp[j]
@@ -40,28 +37,19 @@ def parse_bptc_32_11(data, level):
             result ^= data[i + 16 * j]
 
         if result != 0:
-            print('BPTC C', i, result)
+            out(0, 'BPTC C {}: crc failed'.format(i))
             error_count += 1
 
+    out(0 if error_count > 0 else 1, 'BPTC ERRORS:', error_count)
 
-    if error_count > 0 or level >= 1:
-        print('BPTC ERRORS:', error_count)
-
-    if error_count > 0:
-        return None
 
     result = data[0:12]
 
-    if level >= 1:
-        print('DATA', len(result), squash_bits(result))
-
-    if level >= 2:
-        print()
-        for i in range(1):
-            for j in range(12):
-                print(result[i * 12 + j], end='')
-            print()
-        print()
+    out(1, 'DATA', len(result), squash_bits(result))
+    out(2)
+    for i in range(1):
+        out(2, squash_bits((result[i * 12 + j] for j in range(12)), False))
+    out(2)
 
     return result
 
@@ -69,23 +57,20 @@ def parse_bptc_32_11(data, level):
 def parse_bptc_128_72(data, level):
     deinterleave(data, EMB_LC_BPTC_INTERLEAVING)
 
-    if level >= 2:
-        print()
-        for i in range(8):
-            for j in range(16):
-                print(data[i * 16 + j], end='')
-            print()
-        print()
+    out(2)
+    for i in range(8):
+        out(2, ''.join(data[i * 16 + j] for j in range(16)))
+    out(2)
+
 
     error_count = 0
 
     for i in range(4):
         temp = [data[i * 16 + j] for j in range(16)]
 
-        result = hamming(temp, HAMMING_16_11_4_H)
-        if result != 'correct':
-            print('BPTC R', i, result)
-            error_count += 1
+        with out.context('BPTC R {}'.format(i)) as out:
+            if not hamming(temp, HAMMING_16_11_4_H, out):
+                error_count += 1
 
         for j in range(16):
             data[i * 16 + j] = temp[j]
@@ -96,15 +81,11 @@ def parse_bptc_128_72(data, level):
             result ^= data[i + 16 * j]
 
         if result != 0:
-            print('BPTC C', i, result)
+            out(0, 'BPTC C {}: crc failed'.format(i))
             error_count += 1
 
+    out(0 if error_count > 0 else 1, 'BPTC ERRORS:', error_count)
 
-    if error_count > 0 or level >= 1:
-        print('BPTC ERRORS:', error_count)
-
-    if error_count > 0:
-        return None
 
     result = []
     for i in range(2):
@@ -114,31 +95,28 @@ def parse_bptc_128_72(data, level):
     for i in range(2, 7):
         result.append(data[i * 16 + 10])
 
-    if level >= 1:
-        print('DATA', len(result), squash_bits(result))
+    out(1, 'DATA', len(result), squash_bits(result))
 
     return result
 
-def parse_bptc_68_38(data, level):
+
+def parse_bptc_68_38(data, out):
     deinterleave(data, CACH_BPTC_INTERLEAVING)
 
-    if level >= 2:
-        print()
-        for i in range(4):
-            for j in range(17):
-                print(data[i * 17 + j], end='')
-            print()
-        print()
+    out(2)
+    for i in range(4):
+        out(2, squash_bits((data[i * 17 + j] for j in range(17)), False))
+    out(2)
+
 
     error_count = 0
 
     for i in range(4):
         temp = [data[i * 17 + j] for j in range(17)]
 
-        result = hamming(temp, HAMMING_17_12_3_H)
-        if result != 'correct':
-            print('BPTC R', i, result)
-            error_count += 1
+        with out.context('BPTC R {}'.format(i)) as out:
+            if not hamming(temp, HAMMING_17_12_3_H, out):
+                error_count += 1
 
         for j in range(17):
             data[i * 17 + j] = temp[j]
@@ -149,30 +127,21 @@ def parse_bptc_68_38(data, level):
             result ^= data[i + 17 * j]
 
         if result != 0:
-            print('BPTC C', i, result)
+            out(0, 'BPTC C {}: crc failed'.format(i))
             error_count += 1
 
+    out(0 if error_count > 0 else 1, 'BPTC ERRORS:', error_count)
 
-    if error_count > 0 or level >= 1:
-        print('BPTC ERRORS:', error_count)
-
-    if error_count > 0:
-        return None
 
     result = []
     for i in range(3):
         result.extend(data[i * 17:i * 17 + 12])
 
-    if level >= 1:
-        print('DATA', len(result), squash_bits(result))
-
-    if level >= 2:
-        print()
-        for i in range(3):
-            for j in range(12):
-                print(result[i * 12 + j], end='')
-            print()
-        print()
+    out(1, 'DATA', len(result), squash_bits(result))
+    out(2)
+    for i in range(3):
+        out(2, squash_bits((result[i * 12 + j] for j in range(12)), False))
+    out(2)
 
     return result
 
@@ -180,23 +149,20 @@ def parse_bptc_68_38(data, level):
 def parse_bptc_128_72(data, level):
     deinterleave(data, EMB_LC_BPTC_INTERLEAVING)
 
-    if level >= 2:
-        print()
-        for i in range(8):
-            for j in range(16):
-                print(data[i * 16 + j], end='')
-            print()
-        print()
+    out(2)
+    for i in range(8):
+        out(2, ''.join(data[i * 16 + j] for j in range(16)))
+    out(2)
+
 
     error_count = 0
 
     for i in range(4):
         temp = [data[i * 16 + j] for j in range(16)]
 
-        result = hamming(temp, HAMMING_16_11_4_H)
-        if result != 'correct':
-            print('BPTC R', i, result)
-            error_count += 1
+        with out.context('BPTC R {}'.format(i)) as out:
+            if not hamming(temp, HAMMING_16_11_4_H, out):
+                error_count += 1
 
         for j in range(16):
             data[i * 16 + j] = temp[j]
@@ -207,15 +173,11 @@ def parse_bptc_128_72(data, level):
             result ^= data[i + 16 * j]
 
         if result != 0:
-            print('BPTC C', i, result)
+            out(0, 'BPTC C {}: crc failed'.format(i))
             error_count += 1
 
+    out(0 if error_count > 0 else 1, 'BPTC ERRORS:', error_count)
 
-    if error_count > 0 or level >= 1:
-        print('BPTC ERRORS:', error_count)
-
-    if error_count > 0:
-        return None
 
     result = []
     for i in range(2):
@@ -225,33 +187,28 @@ def parse_bptc_128_72(data, level):
     for i in range(2, 7):
         result.append(data[i * 16 + 10])
 
-    if level >= 1:
-        print('DATA', len(result), squash_bits(result))
+    out(1, 'DATA', len(result), squash_bits(result))
 
     return result
 
 
-
-def parse_bptc_196_96(data, level):
+def parse_bptc_196_96(data, out):
     deinterleave(data, BPTC_INTERLEAVING)
 
-    if level >= 2:
-        print()
-        for i in range(13):
-            for j in range(15):
-                print(data[1 + i * 15 + j], end='')
-            print()
-        print()
+    out(2)
+    for i in range(13):
+        out(2, squash_bits((data[1 + i * 15 + j] for j in range(15)), False))
+    out(2)
+
 
     error_count = 0
 
     for i in range(15):
         temp = [data[1 + i + 15 * j] for j in range(13)]
 
-        result = hamming(temp, HAMMING_13_9_3_H)
-        if result != 'correct':
-            print('BPTC C', i, result)
-            error_count += 1
+        with out.context('BPTC C {}'.format(i)) as out:
+            if not hamming(temp, HAMMING_13_9_3_H, out):
+                error_count += 1
 
         for j in range(13):
             data[1 + i + 15 * j] = temp[j]
@@ -259,34 +216,25 @@ def parse_bptc_196_96(data, level):
     for i in range(13):
         temp = [data[1 + i * 15 + j] for j in range(15)]
 
-        result = hamming(temp, HAMMING_15_11_3_H)
-        if result != 'correct':
-            print('BPTC R', i, result)
-            error_count += 1
+        with out.context('BPTC R {}'.format(i)) as out:
+            if not hamming(temp, HAMMING_15_11_3_H, out):
+                error_count += 1
 
         for j in range(15):
             data[1 + i * 15 + j] = temp[j]
 
-    if error_count > 0 or level >= 1:
-        print('BPTC ERRORS:', error_count)
+    out(0 if error_count > 0 else 1, 'BPTC ERRORS:', error_count)
 
-    if error_count > 0:
-        return None
 
     result = data[4:12]
     for i in range(1,9):
         result.extend(data[i * 15 + 1:i * 15 + 12])
 
-    if level >= 1:
-        print('DATA', len(result), squash_bits(result))
-
-    if level >= 2:
-        print()
-        for i in range(9):
-            for j in range(8):
-                print(result[1 + i * 8 + j], end='')
-            print()
-        print()
+    out(1, 'DATA', len(result), squash_bits(result))
+    out(2)
+    for i in range(9):
+        out(2, squash_bits((result[1 + i * 8 + j] for j in range(8)), False))
+    out(2)
 
     return result
 

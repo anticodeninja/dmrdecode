@@ -7,8 +7,9 @@
 # Copyright 2019 Artem Yamshanov, me [at] anticode.ninja
 
 CRC_8 = (0b111, 8, 0, 0)
+CRC_CCITT = (0x1021, 16, 0, 0xffff)
 
-def crc(bits, config):
+def crc(bits, config, extra_mask=0):
     polynome, polynome_len, initial, inversion = config
     bit_mask = 1 << (polynome_len - 1)
     crc_mask = (1 << polynome_len) - 1
@@ -18,6 +19,6 @@ def crc(bits, config):
         op = (crc & bit_mask) ^ (bit * bit_mask)
         crc = (crc << 1) & crc_mask
         if op: crc ^= polynome
-    crc = crc ^ inversion
+    crc = crc ^ inversion ^ extra_mask
 
     return [crc >> (polynome_len - i - 1) & 1 for i in range(polynome_len)]

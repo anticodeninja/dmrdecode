@@ -87,14 +87,16 @@ HAMMING_16_11_4_H = hamming_revert(HAMMING_16_11_4_G, 5)
 HAMMING_17_12_3_H = hamming_revert(HAMMING_17_12_3_G, 5)
 
 
-def hamming(bits, h):
+def hamming(bits, h, out):
     s = mul(bits, h)
     if all(x == 0 for x in s):
-        return 'correct'
+        return True
 
     for error_bit, row in enumerate(h):
         if s == row[-len(s):]:
             bits[error_bit] = 1 - bits[error_bit]
-            return 'fixed'
+            out(0, 'fix {} bit'.format(bits[error_bit]))
+            return True
 
-    return ':('
+    out(0, 'cannot decode')
+    return False
